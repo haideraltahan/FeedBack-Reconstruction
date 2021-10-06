@@ -24,11 +24,11 @@ from utils import *
 
 
 class Main(object):
-    def __init__(self, img_size=225, cuda=torch.cuda.is_available(), images_folder='./data',
-                 models_folder='./models', model='prior', test_image='156imagesC', latent_dim=100,
+    def __init__(self, img_size=224, cuda=torch.cuda.is_available(), images_folder='./data',
+                 models_folder='./models', model='aae_dprior', test_image='156imagesC', latent_dim=100,
                  samples_folder='./samples', logs_folder='./logs', n_epochs=2000, batch_size=1024, n_model=None,
                  intermediate_size=512,
-                 sample_interval=50, n_cpu=32, n_classes=4, train_data='train_Dataset.lmdb', dist_prior=False,
+                 sample_interval=50, n_cpu=8, n_classes=4, train_data='train_Dataset.lmdb', dist_prior=True,
                  decoder_prior=False, deconv=True, init=True, m=7, random=False):
 
         super(Main, self).__init__()

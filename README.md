@@ -1,8 +1,9 @@
 # FeedBack Reconstruction
 
-Codebase for Reconstructing feedback representations in ventral visual pathway with a generative adversarial autoencoder.
-In this repository, we only have PyTorch implementation. Please follow the steps below to ensure that the code work correctly.
- 
+Codebase for Reconstructing feedback representations in ventral visual pathway with a generative adversarial
+autoencoder. In this repository, we only have PyTorch implementation. Please follow the steps below to ensure that the
+code work correctly.
+
 # Install Python requirements
 
 Before running the scripts, install all the python libraries:
@@ -10,8 +11,9 @@ Before running the scripts, install all the python libraries:
 ```
 pip install -r requirements.txt
 ```
- 
-Additionally, we pre-installed `cuda/10.1`, `cudnn/7.6.5`, and `nccl/2.5.6`. Instructions can be found here https://developer.nvidia.com/cuda-toolkit-archive
+
+Additionally, we pre-installed `cuda/10.1`, `cudnn/7.6.5`, and `nccl/2.5.6`. Instructions can be found
+here https://developer.nvidia.com/cuda-toolkit-archive
 
 # Training
 
@@ -43,6 +45,6 @@ Make sure that you have the saved model in the `./model` directory.
 
 # Saved Models
 
-Models for the final results can be downloaded from [GOOGLE DRIVE]
+Model for the main result can be found in the in `models` folder.
 
 Please make sure to maintain the folder structure.

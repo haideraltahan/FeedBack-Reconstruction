@@ -45,6 +45,6 @@ Make sure that you have the saved model in the `./model` directory.
 
 # Saved Models
 
-Model for the main result can be found in the in `models` folder.
+Model for the main result can be found in the in [`models`](https://github.com/haideraltahan/FeedBack-Reconstruction/tree/main/models/aae_dprior) folder.
 
 Please make sure to maintain the folder structure.

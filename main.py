@@ -71,15 +71,6 @@ class Main(object):
             self.encoder.cuda()
             self.decoder.cuda()
             self.discriminator.cuda()
-            summary(self.encoder, input_size=(3, img_size, img_size))
-            if decoder_prior:
-                summary(self.decoder, input_size=(1, latent_dim + n_classes))
-            else:
-                summary(self.decoder, input_size=(1, latent_dim))
-            if dist_prior:
-                summary(self.discriminator, input_size=(1, latent_dim + n_classes))
-            else:
-                summary(self.discriminator, input_size=(1, latent_dim))
         if not random:
             self.load_model(n_model=n_model, train=False)
         self.writer = SummaryWriter(log_dir=self.logs_folder)
@@ -87,16 +78,7 @@ class Main(object):
         print(f"tensorboard --logdir={self.logs_folder}")
 
     def define_models(self):
-        if 'aae' in self.model:
-            self.encoder = Encoder(self.Tensor, latent_dim=self.latent_dim,
-                                   intermediate_size=self.intermediate_size, init=self.init, reparm=True)
-        elif 'vae' in self.model:
-            self.encoder = Encoder(self.Tensor, latent_dim=self.latent_dim,
-                                   intermediate_size=self.intermediate_size, init=self.init, reparm=True,
-                                   return_mu=True)
-        else:
-            self.encoder = Encoder(self.Tensor, latent_dim=self.latent_dim,
-                                   intermediate_size=self.intermediate_size, init=self.init, reparm=False)
+        self.encoder = Encoder()
         self.decoder = Decoder(latent_dim=self.latent_dim, prior=self.decoder_prior, deconv=self.deconv,
                                init=self.init,
                                m=self.m)
@@ -147,111 +129,23 @@ class Main(object):
         self.delete_dir_content(save_path)
         dataloader = self.load_data(self.images_folder, 156)
 
-        def hook_fn(m, i, o, e=True):
-            o = o.flatten(1).cpu().detach().numpy()
-            if e:
-                if m in etem_act:
-                    etem_act[m] = np.vstack((etem_act[m], o))
-                else:
-                    etem_act[m] = o
-            else:
-                if m in dtem_act:
-                    dtem_act[m] = np.vstack((dtem_act[m], o))
-                else:
-                    dtem_act[m] = o
-
-        def get_all_layers(net, par=True):
-            for layer in net.modules():
-                if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear) or isinstance(layer, nn.ConvTranspose2d):
-                    print(layer)
-                    layer.register_forward_hook(partial(hook_fn, e=par))
-
-        get_all_layers(self.encoder)
-        get_all_layers(self.decoder, False)
-
+        eactivations = {}
+        dactivations = {}
         for idx, (img, labels) in enumerate(dataloader):
-            etem_act = {}
-            dtem_act = {}
             img = img.cuda()
-            de_img = self.encoder(self.Tensor(img))
-            # print(len(de_img))
-            if len(de_img) == 3:
-                _ = self.decoder(de_img[0])
-                # print(de_img[0].flatten(1).cpu().detach().numpy().shape)
-                etem_act['z'] = de_img[0].flatten(1).cpu().detach().numpy()
-
-            else:
-                _ = self.decoder(de_img)
-                # print(de_img.flatten(1).cpu().detach().numpy().shape)
-                etem_act['z'] = de_img.flatten(1).cpu().detach().numpy()
-
-        for i, activations in tqdm(enumerate(etem_act.values())):
-            savemat(os.path.join(save_path, f'E_L{i + 1}.mat'),
-                    {'RDM': computeRDM(activations.squeeze())})
-        for i, activations in tqdm(enumerate(dtem_act.values())):
-            savemat(os.path.join(save_path, f'D_L{i + 1}.mat'),
-                    {'RDM': computeRDM(activations.squeeze())})
-
-    def gen_compare_rdms(self):
-        assert os.path.exists(os.path.join(self.samples_folder, 'rdms'))
-        save_path = os.path.join(self.samples_folder, 'compare_rdms')
-        os.makedirs(save_path, exist_ok=True)
-        self.delete_dir_content(save_path)
-        files = os.listdir(os.path.join(self.samples_folder, 'rdms'))
-        files.sort()
-        files = [os.path.join(self.samples_folder, 'rdms', x) for x in files]
-        RDMs = list(map(get_RDMs, files))
-        x_labels = [file.split('/')[-1].replace('.mat', '').replace('_L', '') for file in files]
-        res = np.zeros((len(files), len(files)))
-        for i in range(len(files)):
-            for j in range(i + 1, len(files)):
-                tres = 1 - np.corrcoef(lower_tra(RDMs[i]), lower_tra(RDMs[j]))[0, 1]
-                res[i, j] = tres
-                res[j, i] = tres
-
-        fig = plt.figure(figsize=[10, 10])
-        ax = fig.add_subplot(111)
-        cax = ax.matshow(res / np.max(res), interpolation='nearest')
-        fig.colorbar(cax)
-
-        files = list(map(lambda x: x.split("\\")[-1].replace('.mat', '').split("/")[-1], files))
-        ax.set_xticklabels([''] + x_labels)
-        ax.set_yticklabels([''] + x_labels)
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        plt.setp(ax.get_xticklabels(), rotation=-45, ha="right",
-                 rotation_mode="anchor")
-        plt.savefig(os.path.join(save_path, f'{self.model}.png'))
-        savemat(os.path.join(save_path, f'{self.model}.mat'), {'Matrix': res})
-
-    def plot_meg_compare(self):
-        assert os.path.exists(self.meg_folder)
-        assert os.path.exists(os.path.join(self.samples_folder, 'rdms'))
-        self.encoder.eval()
-        self.decoder.eval()
-        save_path = os.path.join(self.samples_folder, 'rdm_meg')
-        os.makedirs(save_path, exist_ok=True)
-        # self.delete_dir_content(save_path)
-        rdms_folder = os.path.join(self.samples_folder, 'rdms')
-        E_correlations = []
-        D_correlations = []
-        files = [os.path.join(rdms_folder, i) for i in os.listdir(rdms_folder)]
-        E_files = [file for file in files if 'E_' in file]
-        D_files = [file for file in files if 'D_' in file]
-        if os.path.exists(os.path.join(save_path, 'E.pickle')):
-            E_correlations = pickle.load(open(os.path.join(save_path, 'E.pickle'), 'rb'))
-        else:
-            for idx, layer_rdm in tqdm(enumerate(E_files)):
-                E_correlations.append(compare_meg_rdms(self.meg_folder, get_RDMs(layer_rdm)))
-            pickle.dump(E_correlations, open(os.path.join(save_path, 'E.pickle'), "wb"))
-        plot_correlations_time(E_correlations, save_path)
-        if os.path.exists(os.path.join(save_path, 'D.pickle')):
-            D_correlations = pickle.load(open(os.path.join(save_path, 'D.pickle'), 'rb'))
-        else:
-            for idx, layer_rdm in tqdm(enumerate(D_files)):
-                D_correlations.append(compare_meg_rdms(self.meg_folder, get_RDMs(layer_rdm)))
-            pickle.dump(D_correlations, open(os.path.join(save_path, 'D.pickle'), "wb"))
-        plot_correlations_time(D_correlations, save_path, 'D')
+            de_img, etem_act = self.encoder(self.Tensor(img))
+            if self.decoder_prior:
+                de_img = torch.cat(
+                    (nn.functional.one_hot(labels, self.n_classes).float().cuda(), de_img), 1)
+            _, dtem_act = self.decoder(de_img)
+        for i, g in enumerate(etem_act):
+            eactivations[i] = etem_act[i].cpu().detach().numpy()
+        for i, g in enumerate(dtem_act):
+            dactivations[i] = dtem_act[i].cpu().detach().numpy()
+        for i, activations in tqdm(enumerate(eactivations.items())):
+            savemat(os.path.join(save_path, f'E_L{i + 1}.mat'), {'RDM': computeRDM(activations[1])})
+        for i, activations in tqdm(enumerate(dactivations.items())):
+            savemat(os.path.join(save_path, f'D_L{i + 1}.mat'), {'RDM': computeRDM(activations[1])})
 
     def gen_images(self, n_row=8):
         assert os.path.exists(self.images_folder)
@@ -259,11 +153,11 @@ class Main(object):
         os.makedirs(save_path, exist_ok=True)
         self.delete_dir_content(save_path)
         dataloader = self.load_data(self.images_folder, batch_size=1)
-        for idx, (img, _) in enumerate(dataloader):
+        for idx, (img, y) in enumerate(dataloader):
             decode = self.encoder(img)
-            gen_imgs = self.decoder(decode)
+            gen_imgs = self.decoder(decode[0])
             break
-        save_image(gen_imgs, os.path.join(save_path, 'f.png'), nrow=n_row, normalize=True)
+        save_image(gen_imgs[0], os.path.join(save_path, 'f.png'), nrow=n_row, normalize=True)
         save_image(img, os.path.join(save_path, 'r.png'), nrow=n_row, normalize=True)
 
     def load_data(self, dir, batch_size=None, shuffle=False, lmdb=False):
@@ -297,7 +191,7 @@ class Main(object):
                 checkpoint = torch.load(os.path.join(self.models_folder, files[-1]),
                                         map_location='cuda' if self.cuda else 'cpu')
 
-            self.discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+            self.discriminator.load_state_dict(checkpoint['discriminator_state_dict'], strict=True)
             self.decoder.load_state_dict(checkpoint['decoder_state_dict'], strict=True)
             self.encoder.load_state_dict(checkpoint['encoder_state_dict'], strict=True)
 
